@@ -800,3 +800,26 @@ static volatile long syz_kvm_setup_cpu(volatile long a0, volatile long a1, volat
 		return -1;
 	return 0;
 }
+
+#define FEATURE_INTEL 0x00000001
+#define FEATURE_INTEL_ECX_VMX (1 << 5)
+
+#define FEATURE_AMD 0x800000001
+#define FEATURE_AMD_ECX_SVM (1 << 2)
+
+static long cpu_feature_enabled(uint32_t function, uint32_t eax_bits, uint32_t ebx_bits, uint32_t ecx_bits, uint32_t edx_bits)
+{
+	int kvmfd = open("/dev/kvm", O_RDWR);
+	char buf[sizeof(struct kvm_cpuid2) + 128 * sizeof(struct kvm_cpuid_entry2)];
+	memset(buf, 0, sizeof(buf));
+	struct kvm_cpuid2* cpuid = (struct kvm_cpuid2*)buf;
+	cpuid->nent = 128;
+	ioctl(kvmfd, KVM_GET_SUPPORTED_CPUID, cpuid);
+	close(kvmfd);
+	for (uint32_t i = 0; i < cpuid->nent; i++) {
+		struct kvm_cpuid_entry2* entry = &cpuid->entries[i];
+		if (entry->function == function && (!eax_bits || (entry->eax & eax_bits)) && (!ebx_bits || (entry->ebx & ebx_bits)) && (!ecx_bits || (entry->ecx & ecx_bits)) && (!edx_bits || (entry->edx & edx_bits)))
+			return 0;
+	}
+	return -1;
+}
